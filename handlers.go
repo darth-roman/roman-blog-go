@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type BlogPost struct {
-	PostId string	`bson:"_id"`
-	Title string	`bson:"title"`
-	Techs string	`bson:"techs"`
-	Status string	`bson:"status"`
-	Clickme string	`bson:"clickme"`
-	Tryme string	`bson:"tryme,omitempty"`
-	Readme string	`bson:"readme,omitempty"`
+	Title string			`bson:"title"`
+	Techs string			`bson:"techs"`
+	Status string			`bson:"status"`
+	Clickme string			`bson:"clickme"`
+	Tryme string			`bson:"tryme,omitempty"`
+	Readme string			`bson:"readme,omitempty"`
+	CreatedAt time.Time		`bson:"create_at"`
+	UpdatedAt time.Time		`bson:"updated_at"`
 }
 
 func CreatePost(client *mongo.Client, dbName string) http.HandlerFunc {
@@ -38,6 +40,8 @@ func CreatePost(client *mongo.Client, dbName string) http.HandlerFunc {
 			Clickme: clickme,
 			Tryme: tryme,
 			Readme: readme,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		result, err := coll.InsertOne(context.TODO(), blogPost)
