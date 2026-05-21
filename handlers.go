@@ -2,16 +2,20 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type BlogPost struct {
+	BlogID string			`bson:"blog_id"`
 	Title string			`bson:"title"`
 	Techs string			`bson:"techs"`
 	Status string			`bson:"status"`
@@ -22,9 +26,16 @@ type BlogPost struct {
 	UpdatedAt time.Time		`bson:"updated_at"`
 }
 
+type BlogPostResponse struct {
+	ID any		    `bson:"_id"`	
+	Title string	`bson:"title"`
+}
+
+var coll *mongo.Collection
+
 func CreatePost(client *mongo.Client, dbName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		coll := client.Database(dbName).Collection("posts")
+		coll = client.Database(dbName).Collection("posts")
 
 		title := r.FormValue("title")
 		techs := r.FormValue("techs")
@@ -33,7 +44,12 @@ func CreatePost(client *mongo.Client, dbName string) http.HandlerFunc {
 		tryme := r.FormValue("tryme")
 		readme := r.FormValue("readme")
 
+		blogId, _ := uuid.NewRandom()
+
+		fmt.Println(blogId.String())
+
 		blogPost := &BlogPost{
+			BlogID: blogId.String(),
 			Title: title,
 			Techs: techs,
 			Status: status,
@@ -48,14 +64,41 @@ func CreatePost(client *mongo.Client, dbName string) http.HandlerFunc {
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		fmt.Printf("Document Inserted with success, _id:%v", result.InsertedID)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-
-		if err := json.NewEncoder(w).Encode(result); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		
+		blogPostResponse := &BlogPostResponse{
+			ID: result.InsertedID ,
+			Title: blogPost.Title,
 		}
+		returnResponseJSON(w, http.StatusCreated, blogPostResponse)
+	}
+}
+
+func GetOnePostByUUID(client *mongo.Client, dbName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		coll = client.Database(dbName).Collection("posts")
+
+		uuid := strings.TrimPrefix(r.URL.Path, "/blogs/")
+
+		if uuid == "" {
+			http.Error(w, "missing id", http.StatusBadRequest)
+			return
+		}
+
+		filter := bson.D{{"blog_id", uuid}}
+		var result bson.M
+
+		err := coll.FindOne(context.TODO(), filter).Decode(&result)
+		
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				http.Error(w, "document not found", http.StatusNotFound)
+				return
+			}
+			log.Printf("failed to find document: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		returnResponseJSON(w, http.StatusOK, result)
 	}
 }

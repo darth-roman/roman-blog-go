@@ -57,6 +57,7 @@ func main(){
 	mongoClient = *connectToDatabase(dabataseName)
 	r.Route("/blogs", func(r chi.Router){
 		r.Post("/create", CreatePost(mongoClient.Client, dabataseName))
+		r.Get("/{id}", GetOnePostByUUID(mongoClient.Client, dabataseName))
 	})
 	
 	var port string = fmt.Sprintf(":%s", os.Getenv("PORT"))
